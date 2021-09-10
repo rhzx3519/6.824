@@ -38,8 +38,8 @@ func (w *woker) callApplyTask() {
 	w.reduceTaskId = reply.ReduceTaskId
 	w.numberOfReduce = reply.NumberOfReduce
 
-	fmt.Printf("Receive task reply, taskType: %v, mapTaskId: %v, reduceTaskId: %v\n",
-		w.taskType, w.mapTaskId, w.reduceTaskId)
+	//fmt.Printf("Receive task reply, taskType: %v, mapTaskId: %v, reduceTaskId: %v\n",
+	//	w.taskType, w.mapTaskId, w.reduceTaskId)
 
 	var err error
 	switch reply.TaskType {
@@ -50,7 +50,7 @@ func (w *woker) callApplyTask() {
 	}
 
 	if err != nil {
-		log.Println(err)
+		//log.Println(err)
 		w.callTaskResult(false)
 	} else {
 		w.callTaskResult(true)
@@ -63,21 +63,20 @@ func (w *woker) handleMapTask(filename string, taskId int, nReduce int) (err err
 	intermediate := []KeyValue{}
 	file, err := os.Open(filename)
 	if err != nil {
-		log.Println("cannot open %v", filename)
+		//log.Println("cannot open %v", filename)
 	}
 	content, err := ioutil.ReadAll(file)
 	if err != nil {
-		log.Println("cannot read %v", filename)
+		//log.Println("cannot read %v", filename)
 	}
 	file.Close()
 	kva := w.mapf(filename, string(content))
 	intermediate = append(intermediate, kva...)
 
-	//sort.Sort(ByKey(intermediate))
-
 	var openFiles = make(map[string]*os.File)
 	defer func() {
-		for _, f := range openFiles {
+		for filename, f := range openFiles {
+			os.Rename(f.Name(), filename)
 			f.Close()
 		}
 	}()
@@ -86,19 +85,20 @@ func (w *woker) handleMapTask(filename string, taskId int, nReduce int) (err err
 		y := ihash(kv.Key) % nReduce
 		ofilename := fmt.Sprintf("mr-%d-%d", taskId, y)
 		if _, ok := openFiles[ofilename]; !ok {
-			f, err := os.OpenFile(ofilename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+			tmpFile, err := ioutil.TempFile("./", "intermediate")
+			//f, err := os.OpenFile(ofilename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 			if err != nil {
-				log.Println(err)
+				//log.Println(err)
 				continue
 			}
-			openFiles[ofilename] = f
+			openFiles[ofilename] = tmpFile
 		}
 		// If the file doesn't exist, create it, or append to the file f,
 		f := openFiles[ofilename]
 		enc := json.NewEncoder(f)
 		err = enc.Encode(&kv)
 		if err != nil {
-			log.Println(err)
+			//log.Println(err)
 		}
 	}
 
@@ -115,7 +115,7 @@ func (w *woker) handleReduceTask(reduceTaskId int) (err error) {
 		if !fileinfo.IsDir() && strings.HasSuffix(fileinfo.Name(), suffix) {
 			f, err := os.Open(fileinfo.Name())
 			if err != nil {
-				log.Println(err)
+				//log.Println(err)
 				continue
 			}
 			dec := json.NewDecoder(f)
@@ -132,9 +132,11 @@ func (w *woker) handleReduceTask(reduceTaskId int) (err error) {
 
 	sort.Sort(ByKey(intermediate))
 	oname := fmt.Sprintf("mr-out-%d", reduceTaskId)
-	ofile, _ := os.Create(oname)
+	tmpFile, err := ioutil.TempFile("./", "reducing")
+
 	defer func() {
-		ofile.Close()
+		os.Rename(tmpFile.Name(), oname)
+		tmpFile.Close()
 	}()
 
 	//
@@ -154,7 +156,7 @@ func (w *woker) handleReduceTask(reduceTaskId int) (err error) {
 		output := w.reducef(intermediate[i].Key, values)
 
 		// this is the correct format for each line of Reduce output.
-		fmt.Fprintf(ofile, "%v %v\n", intermediate[i].Key, output)
+		fmt.Fprintf(tmpFile, "%v %v\n", intermediate[i].Key, output)
 
 		i = j
 	}
@@ -225,6 +227,8 @@ func Worker(mapf func(string, string) []KeyValue,
 		}
 		time.Sleep(time.Second)
 	}
+
+	//log.Println("Worker shut down...")
 }
 
 //

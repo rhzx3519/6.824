@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"sync"
+	"time"
 )
 import "net"
 import "os"
@@ -38,6 +39,10 @@ func (c *Coordinator) ApplyTask(args *ApplyTaskArgs, reply *ApplyTaskReply) (err
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
+	//wait := make(chan string)
+	//go c.handleRequest(wait)
+	//x := <- wait
+
 	switch c.stage {
 	case Map:
 		err = c.handleApplyMapTask(reply)
@@ -45,7 +50,7 @@ func (c *Coordinator) ApplyTask(args *ApplyTaskArgs, reply *ApplyTaskReply) (err
 		err = c.handleApplyReduceTask(reply)
 	}
 	if err != nil {
-		log.Println("ApplyTask error...", err)
+		//log.Println("ApplyTask error...", err)
 	}
 	//log.Println("Coordinator's current CurrentStage is", c.stage)
 	return
@@ -81,6 +86,16 @@ func (c *Coordinator) handleApplyMapTask(reply *ApplyTaskReply) (err error) {
 	reply.MapTaskId = task.id
 	reply.Filename = task.filename
 	reply.NumberOfReduce = c.nReduce
+
+	// wait 10s if task is still unfinished, set task'status to Todo
+	time.AfterFunc(time.Second*10, func() {
+		c.mutex.Lock()
+		defer c.mutex.Unlock()
+		if c.mapTasks[task.id].status != Done {
+			//log.Printf("Reset map task Todo, mapTaskId: %v\n", task.id)
+			c.mapTasks[task.id].status = Todo
+		}
+	})
 	return
 }
 
@@ -95,6 +110,16 @@ func (c *Coordinator) handleApplyReduceTask(reply *ApplyTaskReply) (err error) {
 	reply.TaskType = Reduce
 	reply.ReduceTaskId = task.id
 	reply.NumberOfReduce = c.nReduce
+
+	// wait 10s if task is still unfinished, set task'status to Todo
+	time.AfterFunc(time.Second*10, func() {
+		c.mutex.Lock()
+		defer c.mutex.Unlock()
+		if c.reduceTasks[task.id].status != Done {
+			//log.Printf("Reset reduce task Todo, reduceTaskId: %v\n", task.id)
+			c.reduceTasks[task.id].status = Todo
+		}
+	})
 	return
 }
 
@@ -178,6 +203,13 @@ func (c *Coordinator) tryNextStage() {
 			c.stage = STAGE_END
 		}
 	}
+}
+
+//
+// handle rpc request
+//
+func (c *Coordinator) handleRequest(ch chan string) {
+
 }
 
 //
