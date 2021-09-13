@@ -519,6 +519,7 @@ func TestRegression1(t *testing.T) {
 // if an RPC is stuck in a server, and the server
 // is killed with DeleteServer(), does the RPC
 // get un-stuck?
+// the RPC will return immediately after DeleteServer().
 //
 func TestKilled(t *testing.T) {
 	runtime.GOMAXPROCS(4)
