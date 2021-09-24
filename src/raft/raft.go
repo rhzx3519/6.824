@@ -93,7 +93,7 @@ type Raft struct {
 	currentState	State
 	//	Reset election timeout ticker when received heartbeat from server
 	resetElectionChan chan int
-	//	Number of granted votes after received RequestVoteRPC reply
+	//	Number of granted votes after received RequestVoteRPC reply, reset after entering candidate state
 	numberOfGrantedVotes int32
 
 	// Volatile fields on leader, reinitialized after election
@@ -528,7 +528,7 @@ func (rf *Raft) enterLeaderState() {
 	rf.mu.Unlock()
 
 	go rf.handleAppendEntriesReply()
-	// Send heartbeat to followers
+	// Send heartbeats immediately to followers
 	go rf.pulse()
 }
 
